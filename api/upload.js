@@ -6,6 +6,8 @@ export default async function handler(req, res) {
     }
 
     const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    const video = req.body?.video;
+    const caption = req.body?.caption || "PostConnect video";
 
     if (!accessToken) {
         return res.status(401).json({
@@ -13,13 +15,22 @@ export default async function handler(req, res) {
         });
     }
 
+    if (!video) {
+        return res.status(400).json({
+            error: "Video tidak ditemukan"
+        });
+    }
+
     try {
+        const videoBuffer = Buffer.from(video, "base64");
+        const videoSize = videoBuffer.length;
+
         const creatorResponse = await fetch(
             "https://open.tiktokapis.com/v2/post/publish/creator_info/query/",
             {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${accessToken}`,
+                    Authorization: `Bearer ${accessToken}`,
                     "Content-Type": "application/json; charset=UTF-8"
                 }
             }
@@ -31,48 +42,84 @@ export default async function handler(req, res) {
             return res.status(400).json(creatorData);
         }
 
-        const response = await fetch(
+        const privacyOptions =
+            creatorData.data?.privacy_level_options || [];
+
+        const privacyLevel =
+            privacyOptions.includes("SELF_ONLY")
+                ? "SELF_ONLY"
+                : privacyOptions[0];
+
+        if (!privacyLevel) {
+            return res.status(400).json({
+                error: "Privacy level TikTok tidak tersedia"
+            });
+        }
+
+        const initResponse = await fetch(
             "https://open.tiktokapis.com/v2/post/publish/video/init/",
             {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${accessToken}`,
+                    Authorization: `Bearer ${accessToken}`,
                     "Content-Type": "application/json; charset=UTF-8"
                 },
                 body: JSON.stringify({
                     post_info: {
-                        title: "PostConnect video",
-                        privacy_level: creatorData.data.privacy_level_options?.[0] || "SELF_ONLY",
+                        title: caption,
+                        privacy_level: privacyLevel,
                         disable_duet: false,
                         disable_comment: false,
                         disable_stitch: false
                     },
                     source_info: {
                         source: "FILE_UPLOAD",
-                        video_size: 0,
-                        chunk_size: 0,
+                        video_size: videoSize,
+                        chunk_size: videoSize,
                         total_chunk_count: 1
                     }
                 })
             }
         );
 
-        const data = await response.json();
+        const initData = await initResponse.json();
 
-        if (!response.ok || data.error?.code !== "ok") {
-            return res.status(response.status || 400).json(data);
+        if (!initResponse.ok || initData.error?.code !== "ok") {
+            return res.status(initResponse.status || 400).json(initData);
+        }
+
+        const uploadUrl = initData.data.upload_url;
+        const publishId = initData.data.publish_id;
+
+        const uploadResponse = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "video/mp4",
+                "Content-Length": String(videoSize),
+                "Content-Range": `bytes 0-${videoSize - 1}/${videoSize}`
+            },
+            body: videoBuffer
+        });
+
+        if (!uploadResponse.ok) {
+            const uploadError = await uploadResponse.text();
+
+            return res.status(uploadResponse.status).json({
+                error: "Gagal mengupload video ke TikTok",
+                details: uploadError
+            });
         }
 
         return res.status(200).json({
             success: true,
-            message: "TikTok upload initialized",
-            upload_url: data.data.upload_url,
-            publish_id: data.data.publish_id
+            message: "Video berhasil dikirim ke TikTok",
+            publish_id: publishId
         });
+
     } catch (error) {
         return res.status(500).json({
-            error: "Gagal menghubungkan ke TikTok",
-            message: error.message
+            error: "Terjadi kesalahan saat upload",
+            details: error.message
         });
     }
 }
