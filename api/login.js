@@ -5,7 +5,7 @@ export default function handler(req, res) {
     const params = new URLSearchParams({
         client_key: clientKey,
         response_type: "code",
-        scope: "user.info.basic",
+        scope: "user.info.basic,video.publish,video.upload",
         redirect_uri: redirectUri,
         state: "postconnect"
     });
