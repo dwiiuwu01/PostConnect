@@ -79,54 +79,85 @@
             const status = document.getElementById("status");
 
             if (!accessToken) {
-                status.textContent = "Please login with TikTok first.";
+                status.textContent =
+                    "Please login with TikTok first.";
                 return;
             }
 
             if (!videoInput.files.length) {
-                status.textContent = "Please select a video.";
+                status.textContent =
+                    "Please select a video.";
                 return;
             }
 
             const file = videoInput.files[0];
 
             if (file.type !== "video/mp4") {
-                status.textContent = "Please select an MP4 video.";
+                status.textContent =
+                    "Please select an MP4 video.";
                 return;
             }
 
-            status.textContent = "Uploading video to TikTok...";
+            status.textContent =
+                "Uploading video to TikTok...";
 
             try {
                 const reader = new FileReader();
 
                 reader.onload = async function () {
-                    const base64Video =
-                        reader.result.split(",")[1];
+                    try {
+                        const base64Video =
+                            reader.result.split(",")[1];
 
-                    const response = await fetch("/api/upload", {
-                        method: "POST",
-                        headers: {
-                            "Authorization": `Bearer ${accessToken}`,
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({
-                            video: base64Video,
-                            caption: caption
-                        })
-                    });
+                        const response = await fetch("/api/upload", {
+                            method: "POST",
+                            headers: {
+                                "Authorization": `Bearer ${accessToken}`,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                video: base64Video,
+                                caption: caption
+                            })
+                        });
 
-                    const data = await response.json();
+                        const data = await response.json();
 
-                    if (!response.ok) {
+                        if (!response.ok) {
+                            if (data.error?.message) {
+                                status.textContent =
+                                    data.error.message;
+                            } else if (typeof data.error === "string") {
+                                status.textContent =
+                                    data.error;
+                            } else {
+                                status.textContent =
+                                    JSON.stringify(data);
+                            }
+
+                            console.error("TikTok API error:", data);
+                            return;
+                        }
+
                         status.textContent =
-                            data.error || "Upload failed.";
-                        console.error(data);
-                        return;
-                    }
+                            "Video berhasil dikirim ke TikTok!";
 
+                        console.log(
+                            "TikTok response:",
+                            data
+                        );
+
+                    } catch (error) {
+                        console.error(error);
+
+                        status.textContent =
+                            "Terjadi kesalahan saat memproses video.";
+                    }
+                };
+
+                reader.onerror = function () {
                     status.textContent =
-                        "Video berhasil dikirim ke TikTok!";
+                        "Gagal membaca file video.";
                 };
 
                 reader.readAsDataURL(file);
