@@ -1,5 +1,5 @@
 export default function handler(req, res) {
-    const clientKey = "awxm6c8nj9y80lbr";
+    const clientKey = "sbawpvcn26m2mjmvwt";
     const redirectUri = "https://post-connect-seven.vercel.app/callback";
 
     const params = new URLSearchParams({
