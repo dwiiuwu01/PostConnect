@@ -26,7 +26,7 @@
                 <textarea id="caption" placeholder="Write your caption..."></textarea>
 
                 <label>Video</label>
-                <input id="video" type="file" accept="video/*">
+                <input id="video" type="file" accept="video/mp4">
 
                 <button class="post-button" onclick="postToTikTok()">
                     Post to TikTok
@@ -55,7 +55,11 @@
 
         if (tokenFromUrl) {
             accessToken = tokenFromUrl;
-            sessionStorage.setItem("tiktok_access_token", accessToken);
+
+            sessionStorage.setItem(
+                "tiktok_access_token",
+                accessToken
+            );
 
             window.history.replaceState(
                 {},
@@ -84,30 +88,52 @@
                 return;
             }
 
-            status.textContent = "Preparing video...";
+            const file = videoInput.files[0];
 
-            const formData = new FormData();
-            formData.append("video", videoInput.files[0]);
-            formData.append("caption", caption);
-            formData.append("access_token", accessToken);
+            if (file.type !== "video/mp4") {
+                status.textContent = "Please select an MP4 video.";
+                return;
+            }
+
+            status.textContent = "Uploading video to TikTok...";
 
             try {
-                const response = await fetch("/api/upload", {
-                    method: "POST",
-                    body: formData
-                });
+                const reader = new FileReader();
 
-                const data = await response.json();
+                reader.onload = async function () {
+                    const base64Video =
+                        reader.result.split(",")[1];
 
-                if (!response.ok) {
+                    const response = await fetch("/api/upload", {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${accessToken}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            video: base64Video,
+                            caption: caption
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        status.textContent =
+                            data.error || "Upload failed.";
+                        console.error(data);
+                        return;
+                    }
+
                     status.textContent =
-                        data.error || "Failed to post video.";
-                    return;
-                }
+                        "Video berhasil dikirim ke TikTok!";
+                };
 
-                status.textContent =
-                    "Video upload request sent to TikTok.";
+                reader.readAsDataURL(file);
+
             } catch (error) {
+                console.error(error);
+
                 status.textContent =
                     "Something went wrong while uploading.";
             }
