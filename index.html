@@ -15,20 +15,24 @@
         <div class="card">
             <h2>Post to TikTok</h2>
 
-            <button class="login-button">
+            <button class="login-button" onclick="loginTikTok()">
                 Login with TikTok
             </button>
 
+            <p id="login-status"></p>
+
             <div class="form">
                 <label>Caption</label>
-                <textarea placeholder="Write your caption..."></textarea>
+                <textarea id="caption" placeholder="Write your caption..."></textarea>
 
                 <label>Video</label>
-                <input type="file" accept="video/*">
+                <input id="video" type="file" accept="video/*">
 
-                <button class="post-button">
+                <button class="post-button" onclick="postToTikTok()">
                     Post to TikTok
                 </button>
+
+                <p id="status"></p>
             </div>
         </div>
 
@@ -38,6 +42,77 @@
             <a href="privacy.html">Privacy Policy</a>
         </div>
     </div>
+
+    <script>
+        let accessToken = sessionStorage.getItem("tiktok_access_token");
+
+        function loginTikTok() {
+            window.location.href = "/api/login";
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const tokenFromUrl = params.get("access_token");
+
+        if (tokenFromUrl) {
+            accessToken = tokenFromUrl;
+            sessionStorage.setItem("tiktok_access_token", accessToken);
+
+            window.history.replaceState(
+                {},
+                document.title,
+                window.location.pathname
+            );
+        }
+
+        if (accessToken) {
+            document.getElementById("login-status").textContent =
+                "TikTok account connected.";
+        }
+
+        async function postToTikTok() {
+            const videoInput = document.getElementById("video");
+            const caption = document.getElementById("caption").value;
+            const status = document.getElementById("status");
+
+            if (!accessToken) {
+                status.textContent = "Please login with TikTok first.";
+                return;
+            }
+
+            if (!videoInput.files.length) {
+                status.textContent = "Please select a video.";
+                return;
+            }
+
+            status.textContent = "Preparing video...";
+
+            const formData = new FormData();
+            formData.append("video", videoInput.files[0]);
+            formData.append("caption", caption);
+            formData.append("access_token", accessToken);
+
+            try {
+                const response = await fetch("/api/upload", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    status.textContent =
+                        data.error || "Failed to post video.";
+                    return;
+                }
+
+                status.textContent =
+                    "Video upload request sent to TikTok.";
+            } catch (error) {
+                status.textContent =
+                    "Something went wrong while uploading.";
+            }
+        }
+    </script>
 
 </body>
 </html>
