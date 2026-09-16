@@ -28,6 +28,35 @@
                 <label>Video</label>
                 <input id="video" type="file" accept="video/mp4">
 
+                <div id="creator-section" style="display: none;">
+                    <p id="creator-name"></p>
+
+                    <label>Who can view this video?</label>
+                    <select id="privacy">
+                        <option value="">Select privacy</option>
+                    </select>
+
+                    <label>
+                        <input type="checkbox" id="allow-comment">
+                        Allow Comment
+                    </label>
+
+                    <label>
+                        <input type="checkbox" id="allow-duet">
+                        Allow Duet
+                    </label>
+
+                    <label>
+                        <input type="checkbox" id="allow-stitch">
+                        Allow Stitch
+                    </label>
+
+                    <label>
+                        <input type="checkbox" id="consent">
+                        I agree to send this video to TikTok.
+                    </label>
+                </div>
+
                 <button class="post-button" onclick="postToTikTok()">
                     Post to TikTok
                 </button>
@@ -71,12 +100,120 @@
         if (accessToken) {
             document.getElementById("login-status").textContent =
                 "TikTok account connected.";
+
+            loadCreatorInfo();
+        }
+
+        async function loadCreatorInfo() {
+            const creatorSection =
+                document.getElementById("creator-section");
+
+            const creatorName =
+                document.getElementById("creator-name");
+
+            const privacy =
+                document.getElementById("privacy");
+
+            const comment =
+                document.getElementById("allow-comment");
+
+            const duet =
+                document.getElementById("allow-duet");
+
+            const stitch =
+                document.getElementById("allow-stitch");
+
+            try {
+                const response = await fetch("/api/creator", {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    document.getElementById("status").textContent =
+                        result.error?.message ||
+                        result.error ||
+                        JSON.stringify(result);
+
+                    return;
+                }
+
+                const data = result.data;
+
+                creatorName.textContent =
+                    "TikTok account: @" + data.creator_username;
+
+                privacy.innerHTML =
+                    '<option value="">Select privacy</option>';
+
+                data.privacy_level_options.forEach(option => {
+                    const item = document.createElement("option");
+
+                    item.value = option;
+                    item.textContent = formatPrivacy(option);
+
+                    privacy.appendChild(item);
+                });
+
+                if (data.comment_disabled) {
+                    comment.disabled = true;
+                }
+
+                if (data.duet_disabled) {
+                    duet.disabled = true;
+                }
+
+                if (data.stitch_disabled) {
+                    stitch.disabled = true;
+                }
+
+                creatorSection.style.display = "block";
+
+            } catch (error) {
+                document.getElementById("status").textContent =
+                    "Failed to load TikTok creator information.";
+            }
+        }
+
+        function formatPrivacy(value) {
+            const names = {
+                PUBLIC_TO_EVERYONE: "Everyone",
+                MUTUAL_FOLLOW_FRIENDS: "Friends",
+                FOLLOWER_OF_CREATOR: "Followers",
+                SELF_ONLY: "Only me"
+            };
+
+            return names[value] || value;
         }
 
         async function postToTikTok() {
-            const videoInput = document.getElementById("video");
-            const caption = document.getElementById("caption").value;
-            const status = document.getElementById("status");
+            const videoInput =
+                document.getElementById("video");
+
+            const caption =
+                document.getElementById("caption").value;
+
+            const privacy =
+                document.getElementById("privacy").value;
+
+            const allowComment =
+                document.getElementById("allow-comment").checked;
+
+            const allowDuet =
+                document.getElementById("allow-duet").checked;
+
+            const allowStitch =
+                document.getElementById("allow-stitch").checked;
+
+            const consent =
+                document.getElementById("consent").checked;
+
+            const status =
+                document.getElementById("status");
 
             if (!accessToken) {
                 status.textContent =
@@ -87,6 +224,18 @@
             if (!videoInput.files.length) {
                 status.textContent =
                     "Please select a video.";
+                return;
+            }
+
+            if (!privacy) {
+                status.textContent =
+                    "Please select a privacy option.";
+                return;
+            }
+
+            if (!consent) {
+                status.textContent =
+                    "Please agree before posting.";
                 return;
             }
 
@@ -117,47 +266,35 @@
                             },
                             body: JSON.stringify({
                                 video: base64Video,
-                                caption: caption
+                                caption: caption,
+                                privacy_level: privacy,
+                                disable_comment: !allowComment,
+                                disable_duet: !allowDuet,
+                                disable_stitch: !allowStitch
                             })
                         });
 
                         const data = await response.json();
 
                         if (!response.ok) {
-                            if (data.error?.message) {
-                                status.textContent =
-                                    data.error.message;
-                            } else if (typeof data.error === "string") {
-                                status.textContent =
-                                    data.error;
-                            } else {
-                                status.textContent =
-                                    JSON.stringify(data);
-                            }
+                            status.textContent =
+                                data.error?.message ||
+                                data.error ||
+                                JSON.stringify(data);
 
-                            console.error("TikTok API error:", data);
+                            console.error(data);
                             return;
                         }
 
                         status.textContent =
                             "Video berhasil dikirim ke TikTok!";
 
-                        console.log(
-                            "TikTok response:",
-                            data
-                        );
-
                     } catch (error) {
                         console.error(error);
 
                         status.textContent =
-                            "Terjadi kesalahan saat memproses video.";
+                            "Something went wrong while uploading.";
                     }
-                };
-
-                reader.onerror = function () {
-                    status.textContent =
-                        "Gagal membaca file video.";
                 };
 
                 reader.readAsDataURL(file);
