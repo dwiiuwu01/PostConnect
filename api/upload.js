@@ -5,9 +5,8 @@ export default async function handler(req, res) {
         });
     }
 
-    const accessToken = req.headers.authorization?.replace("Bearer ", "");
-    const video = req.body?.video;
-    const caption = req.body?.caption || "PostConnect video";
+    const accessToken =
+        req.headers.authorization?.replace("Bearer ", "");
 
     if (!accessToken) {
         return res.status(401).json({
@@ -15,9 +14,24 @@ export default async function handler(req, res) {
         });
     }
 
+    const {
+        video,
+        caption,
+        privacy_level,
+        disable_comment,
+        disable_duet,
+        disable_stitch
+    } = req.body;
+
     if (!video) {
         return res.status(400).json({
             error: "Video tidak ditemukan"
+        });
+    }
+
+    if (!privacy_level) {
+        return res.status(400).json({
+            error: "Privacy level harus dipilih"
         });
     }
 
@@ -25,52 +39,24 @@ export default async function handler(req, res) {
         const videoBuffer = Buffer.from(video, "base64");
         const videoSize = videoBuffer.length;
 
-        const creatorResponse = await fetch(
-            "https://open.tiktokapis.com/v2/post/publish/creator_info/query/",
-            {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    "Content-Type": "application/json; charset=UTF-8"
-                }
-            }
-        );
-
-        const creatorData = await creatorResponse.json();
-
-        if (!creatorResponse.ok || creatorData.error?.code !== "ok") {
-            return res.status(400).json(creatorData);
-        }
-
-        const privacyOptions =
-            creatorData.data?.privacy_level_options || [];
-
-        const privacyLevel =
-            privacyOptions.includes("SELF_ONLY")
-                ? "SELF_ONLY"
-                : privacyOptions[0];
-
-        if (!privacyLevel) {
-            return res.status(400).json({
-                error: "Privacy level TikTok tidak tersedia"
-            });
-        }
-
         const initResponse = await fetch(
             "https://open.tiktokapis.com/v2/post/publish/video/init/",
             {
                 method: "POST",
                 headers: {
-                    Authorization: `Bearer ${accessToken}`,
+                    "Authorization": `Bearer ${accessToken}`,
                     "Content-Type": "application/json; charset=UTF-8"
                 },
                 body: JSON.stringify({
                     post_info: {
-                        title: caption,
-                        privacy_level: privacyLevel,
-                        disable_duet: false,
-                        disable_comment: false,
-                        disable_stitch: false
+                        title: caption || "",
+                        privacy_level: privacy_level,
+                        disable_comment: disable_comment,
+                        disable_duet: disable_duet,
+                        disable_stitch: disable_stitch,
+                        brand_content_toggle: false,
+                        brand_organic_toggle: false,
+                        is_aigc: false
                     },
                     source_info: {
                         source: "FILE_UPLOAD",
@@ -96,13 +82,15 @@ export default async function handler(req, res) {
             headers: {
                 "Content-Type": "video/mp4",
                 "Content-Length": String(videoSize),
-                "Content-Range": `bytes 0-${videoSize - 1}/${videoSize}`
+                "Content-Range":
+                    `bytes 0-${videoSize - 1}/${videoSize}`
             },
             body: videoBuffer
         });
 
         if (!uploadResponse.ok) {
-            const uploadError = await uploadResponse.text();
+            const uploadError =
+                await uploadResponse.text();
 
             return res.status(uploadResponse.status).json({
                 error: "Gagal mengupload video ke TikTok",
